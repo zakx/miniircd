@@ -35,6 +35,47 @@ from optparse import OptionParser
 
 VERSION = "1.1"
 
+HACKINT_PREFIX = "IMPORTANT!h@ckint"
+HACKINT_MESSAGE = "Please do not use hackint.__net__ anymore. Use hackint.org instead. /MOTD for more information."
+HACKINT_FQDN = "fake-irc.hackint.net"
+HACKINT_MESSAGE_LONG = """Hello %(nick)s! Please read this important announcement:
+-
+Dear users, please refrain from using hackint.__NET__ in the future.
+The domain is not under our control anymore and we cannot guarantee
+service availibility under it anymore.
+-
+To make sure that you receive the best hackint experience(TM), use
+one of the domain names that are still under our influence:
+* irc.hackint.org
+* irc.hackint.eu
+EOM."""
+
+HACKINT_MOTD = """
+
+                  __               __
+                 / /_  ____ ______/ /__
+                / __ \/ __ `/ ___/ //_/
+               / / / / /_/ / /__/ ,<           __
+              /_/ /_/\__,_/\___/_/|_| (*)___  / /_
+                                     / / __ \/ __/
+                                    / / / / / /_
+              http://hackint.org   /_/_/ /_/\__/
+              http://hackint.eu
+ ========================================================================
+ + NEWS ++ NEWS ++ NEWS ++ NEWS ++ NEWS ++ NEWS ++ NEWS ++ NEWS ++ NEWS +
+
+  IMPORTANT INFORMATION, PLEASE READ:
+
+  Dear users, please refrain from using hackint.__NET__ in the future.
+  The domain is not under our control anymore and we cannot guarantee
+  service availibility under it anymore.
+
+  To make sure that you receive the best hackint experience(TM), use
+  one of the domain names that are still under our influence:
+    * irc.hackint.org
+    * irc.hackint.eu
+
+"""
 
 def create_directory(path):
     if not os.path.isdir(path):
@@ -208,14 +249,17 @@ class Client(object):
             return
         if self.nickname and self.user:
             self.reply("001 %s :Hi, welcome to IRC" % self.nickname)
-            self.reply("002 %s :Your host is %s, running version miniircd-%s"
-                       % (self.nickname, server.name, VERSION))
+            self.reply("002 %s :Your host is %s, running no real ircd"
+                       % (self.nickname, server.name))
             self.reply("003 %s :This server was created sometime"
                        % self.nickname)
             self.reply("004 %s :%s miniircd-%s o o"
                        % (self.nickname, server.name, VERSION))
             self.send_lusers()
             self.send_motd()
+            for line in HACKINT_MESSAGE_LONG.split("\n"):
+                self.message(":%s NOTICE %s :%s"
+                             % (HACKINT_PREFIX, self.nickname, line % {"nick": self.nickname}))
             self.__handle_command = self.__command_handler
 
     def __command_handler(self, command, arguments):
@@ -231,6 +275,24 @@ class Client(object):
             self.reply("303 %s :%s" % (self.nickname, " ".join(online)))
 
         def join_handler():
+            if len(arguments) < 1:
+                self.reply_461("JOIN")
+                return
+            channelnames = arguments[0].split(",")
+            if len(arguments) > 1:
+                keys = arguments[1].split(",")
+            else:
+                keys = []
+            keys.extend((len(channelnames) - len(keys)) * [None])
+            for (i, channelname) in enumerate(channelnames):
+                self.reply("475 %s %s :Cannot join channel -- this is not a real ircd"
+                            % (self.nickname, channelname))
+            self.message(":%s NOTICE %s :%s"
+                       % (HACKINT_PREFIX, self.nickname, HACKINT_MESSAGE))
+            self.message(":%s PRIVMSG %s :%s"
+                       % (HACKINT_PREFIX, self.nickname, HACKINT_MESSAGE))
+
+        def disabled_real_join_handler():
             if len(arguments) < 1:
                 self.reply_461("JOIN")
                 return
@@ -323,36 +385,8 @@ class Client(object):
                     self.reply("324 %s %s %s"
                                % (self.nickname, targetname, modes))
                     return
-                flag = arguments[1]
-                if flag == "+k":
-                    if len(arguments) < 3:
-                        self.reply_461("MODE")
-                        return
-                    key = arguments[2]
-                    if irc_lower(channel.name) in self.channels:
-                        channel.key = key
-                        self.message_channel(
-                            channel, "MODE", "%s +k %s" % (channel.name, key),
-                            True)
-                        self.channel_log(
-                            channel, "set channel key to %s" % key, meta=True)
-                    else:
-                        self.reply("442 %s :You're not on that channel"
-                                   % targetname)
-                elif flag == "-k":
-                    if irc_lower(channel.name) in self.channels:
-                        channel.key = None
-                        self.message_channel(
-                            channel, "MODE", "%s -k" % channel.name,
-                            True)
-                        self.channel_log(
-                            channel, "removed channel key", meta=True)
-                    else:
-                        self.reply("442 %s :You're not on that channel"
-                                   % targetname)
-                else:
-                    self.reply("472 %s %s :Unknown MODE flag"
-                               % (self.nickname, flag))
+                self.reply("472 %s %s :Unknown MODE flag"
+                           % (self.nickname, flag))
             elif targetname == self.nickname:
                 if len(arguments) == 1:
                     self.reply("221 %s +" % self.nickname)
@@ -400,18 +434,8 @@ class Client(object):
                 return
             targetname = arguments[0]
             message = arguments[1]
-            client = server.get_client(targetname)
-            if client:
-                client.message(":%s %s %s :%s"
-                               % (self.prefix, command, targetname, message))
-            elif server.has_channel(targetname):
-                channel = server.get_channel(targetname)
-                self.message_channel(
-                    channel, command, "%s :%s" % (channel.name, message))
-                self.channel_log(channel, message)
-            else:
-                self.reply("401 %s %s :No such nick/channel"
-                           % (self.nickname, targetname))
+            self.message(":%s %s %s :%s"
+                       % (HACKINT_PREFIX, command, self.nickname, HACKINT_MESSAGE))
 
         def part_handler():
             if len(arguments) < 1:
@@ -627,8 +651,8 @@ class Client(object):
             client.message(msg)
 
     def send_lusers(self):
-        self.reply("251 %s :There are %d users and 0 services on 1 server"
-                   % (self.nickname, len(self.server.clients)))
+        self.reply("251 %s :There are 0 users and 0 services on 1 server"
+                   % (self.nickname))
 
     def send_motd(self):
         server = self.server
@@ -677,7 +701,7 @@ class Server(object):
         else:
             self.address = ""
         server_name_limit = 63  # From the RFC.
-        self.name = socket.getfqdn(self.address)[:server_name_limit]
+        self.name = HACKINT_FQDN
 
         self.channels = {}  # irc_lower(Channel name) --> Channel instance.
         self.clients = {}  # Socket --> Client instance.
@@ -733,13 +757,7 @@ class Server(object):
         return channel
 
     def get_motd_lines(self):
-        if self.motdfile:
-            try:
-                return open(self.motdfile).readlines()
-            except IOError:
-                return ["Could not read MOTD file %r." % self.motdfile]
-        else:
-            return []
+        return HACKINT_MOTD.split("\n")
 
     def print_info(self, msg):
         if self.verbose:
