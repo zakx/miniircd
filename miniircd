@@ -157,7 +157,7 @@ class Client(object):
         self.nickname = None
         self.user = None
         self.realname = None
-        (self.host, self.port) = socket.getpeername()
+        (self.host, self.port, _, _) = socket.getpeername()
         self.__timestamp = time.time()
         self.__readbuffer = ""
         self.__writebuffer = ""
@@ -804,7 +804,7 @@ class Server(object):
     def start(self):
         serversockets = []
         for port in self.ports:
-            s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            s = socket.socket(socket.AF_INET6, socket.SOCK_STREAM)
             s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
             try:
                 s.bind((self.address, port))
