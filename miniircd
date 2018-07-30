@@ -390,8 +390,6 @@ class Client(object):
             elif targetname == self.nickname:
                 if len(arguments) == 1:
                     self.reply("221 %s +" % self.nickname)
-                else:
-                    self.reply("501 %s :Unknown MODE flag" % self.nickname)
             else:
                 self.reply_403(targetname)
 
